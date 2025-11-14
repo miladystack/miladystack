@@ -1,4 +1,4 @@
-package onex
+package milady
 
 import (
 	"github.com/miladystack/miladystack/pkg/log"

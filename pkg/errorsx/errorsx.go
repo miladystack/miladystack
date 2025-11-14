@@ -10,7 +10,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// ErrorX 定义了 OneX 项目体系中使用的错误类型，用于描述错误的详细信息.
+// ErrorX 定义了 Miladystack 项目体系中使用的错误类型，用于描述错误的详细信息.
 type ErrorX struct {
 	// Code 表示错误的 HTTP 状态码，用于与客户端进行交互时标识错误的类型.
 	Code int `json:"code,omitempty"`
@@ -39,7 +39,7 @@ func (err *ErrorX) Error() string {
 	return fmt.Sprintf("error: code = %d reason = %s message = %s metadata = %v", err.Code, err.Reason, err.Message, err.Metadata)
 }
 
-// WithMessage 设置错误的 Message 字段.  
+// WithMessage 设置错误的 Message 字段.
 func (err *ErrorX) WithMessage(format string, args ...any) *ErrorX {
 	err.Message = fmt.Sprintf(format, args...)
 	return err
@@ -73,9 +73,9 @@ func (err *ErrorX) GRPCStatus() *status.Status {
 	return s
 }
 
-// WithRequestID 设置请求 ID.  
+// WithRequestID 设置请求 ID.
 func (err *ErrorX) WithRequestID(requestID string) *ErrorX {
-	return err.KV("X-Request-ID", requestID) // 设置请求 ID  
+	return err.KV("X-Request-ID", requestID) // 设置请求 ID
 }
 
 // Is 判断当前错误是否与目标错误匹配.

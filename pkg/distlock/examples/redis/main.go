@@ -6,14 +6,14 @@ import (
 	"log"
 	"time"
 
-	"github.com/onexstack/onexstack/pkg/db"
-	"github.com/onexstack/onexstack/pkg/distlock"
+	"github.com/miladystack/miladystack/pkg/db"
+	"github.com/miladystack/miladystack/pkg/distlock"
 )
 
 func main() {
 	opts := &db.RedisOptions{
 		Addr: "10.37.91.93:6379",
-		//Username: "onex",
+		// Username: "onex",
 		Password: "onex(#)666",
 		Database: 0,
 	}
@@ -40,7 +40,7 @@ func main() {
 	}
 
 	// 模拟业务逻辑
-	time.Sleep(1000 * time.Second) // 修改为合理的时间，避免长时间阻塞  
+	time.Sleep(1000 * time.Second) // 修改为合理的时间，避免长时间阻塞
 
 	if err := locker.Unlock(ctx); err != nil {
 		fmt.Printf("failed to release lock: %v\n", err)

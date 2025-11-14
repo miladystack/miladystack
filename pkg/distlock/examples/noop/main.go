@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/onexstack/onexstack/pkg/distlock"
+	"github.com/miladystack/miladystack/pkg/distlock"
 )
 
 func main() {
@@ -26,7 +26,7 @@ func main() {
 	}
 
 	// 模拟业务逻辑
-	time.Sleep(10 * time.Second) // 修改为合理的时间，避免长时间阻塞  
+	time.Sleep(10 * time.Second) // 修改为合理的时间，避免长时间阻塞
 
 	if err := locker.Unlock(ctx); err != nil {
 		fmt.Printf("failed to release lock: %v\n", err)

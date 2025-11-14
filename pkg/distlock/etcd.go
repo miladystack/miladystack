@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/miladystack/miladystack/pkg/logger"
-	"go.etcd.io/etcd/clientv3"
+	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
 // EtcdLocker provides a distributed locking mechanism using etcd.

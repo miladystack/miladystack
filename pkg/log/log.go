@@ -15,7 +15,7 @@ type Field = zapcore.Field
 
 type ContextExtractors map[string]func(context.Context) string
 
-// Logger 定义了 onex 项目的日志接口. 该接口只包含了支持的日志记录方法.
+// Logger 定义了 Miladystack 项目的日志接口. 该接口只包含了支持的日志记录方法.
 type Logger interface {
 	Debugf(format string, args ...any)
 	Debugw(msg string, keyvals ...any)
@@ -112,7 +112,7 @@ func NewLogger(opts *Options, options ...Option) *zapLogger {
 
 	// 创建构建 zap.Logger 需要的配置
 	cfg := &zap.Config{
-		// 是否在日志中显示调用日志所在的文件和行号，例如：`"caller":"onex/onex.go:75"`
+		// 是否在日志中显示调用日志所在的文件和行号，例如：`"caller":"miladystack/miladystack.go:75"`
 		DisableCaller: opts.DisableCaller,
 		// 是否禁止在 panic 及以上级别打印堆栈信息
 		DisableStacktrace: opts.DisableStacktrace,
