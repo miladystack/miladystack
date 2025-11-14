@@ -50,8 +50,8 @@ func NewSecureServingOptions() *SecureServingOptions {
 		BindPort:    8443,
 		Required:    true,
 		ServerCert: GeneratableKeyCert{
-			PairName:      "onex",
-			CertDirectory: "/var/run/onex",
+			PairName:      "milady",
+			CertDirectory: "/var/run/milady",
 		},
 	}
 }

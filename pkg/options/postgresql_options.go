@@ -29,9 +29,9 @@ type PostgreSQLOptions struct {
 func NewPostgreSQLOptions() *PostgreSQLOptions {
 	return &PostgreSQLOptions{
 		Addr:                  "127.0.0.1:5432",
-		Username:              "onex",
-		Password:              "onex(#)666",
-		Database:              "onex",
+		Username:              "milady",
+		Password:              "milady(#)888",
+		Database:              "milady",
 		MaxIdleConnections:    100,
 		MaxOpenConnections:    100,
 		MaxConnectionLifeTime: time.Duration(10) * time.Second,

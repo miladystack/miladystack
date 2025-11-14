@@ -22,7 +22,7 @@ type JWTOptions struct {
 func NewJWTOptions() *JWTOptions {
 	return &JWTOptions{
 		// Realm:         "",
-		Key:           "onex(#)666",
+		Key:           "milady(#)888",
 		Expired:       2 * time.Hour,
 		MaxRefresh:    2 * time.Hour,
 		SigningMethod: "HS512",

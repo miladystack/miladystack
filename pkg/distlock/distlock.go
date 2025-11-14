@@ -11,7 +11,7 @@ import (
 )
 
 // DefaultLockName is the default name used for the distributed lock.
-const DefaultLockName = "onex-distributed-lock"
+const DefaultLockName = "milady-distributed-lock"
 
 // Locker is an interface that defines the methods for a distributed lock.
 // It provides methods to acquire, release, and renew a lock in a distributed system.

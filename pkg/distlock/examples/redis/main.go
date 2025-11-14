@@ -12,9 +12,9 @@ import (
 
 func main() {
 	opts := &db.RedisOptions{
-		Addr: "10.37.91.93:6379",
-		// Username: "onex",
-		Password: "onex(#)666",
+		Addr: "127.0.0.1:6379",
+		// Username: "milady",
+		Password: "milady(#)888",
 		Database: 0,
 	}
 

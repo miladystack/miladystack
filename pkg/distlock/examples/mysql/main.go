@@ -12,10 +12,10 @@ import (
 
 func main() {
 	opts := &db.MySQLOptions{
-		Addr:     "10.37.91.93:3306",
-		Username: "onex",
-		Password: "onex(#)666",
-		Database: "onex",
+		Addr:     "127.0.0.1:3306",
+		Username: "milady",
+		Password: "milady(#)888",
+		Database: "milady",
 	}
 
 	db, err := db.NewMySQL(opts)
