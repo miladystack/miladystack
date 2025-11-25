@@ -26,13 +26,11 @@ func TestInitAndReset(t *testing.T) {
 	key := "test-secret-key"
 	identityKey := "user_id"
 	expiration := 1 * time.Hour
-	refreshTokenExpiration := 24 * time.Hour
 	skipPaths := []string{"/test", "/skip/*"}
 
 	Init(key,
 		WithIdentityKey(identityKey),
 		WithExpiration(expiration),
-		WithRefreshTokenExpiration(refreshTokenExpiration),
 		WithSkipPaths(skipPaths...),
 	)
 
@@ -46,9 +44,6 @@ func TestInitAndReset(t *testing.T) {
 	if cfg.expiration != expiration {
 		t.Errorf("Expected expiration %v, got %v", expiration, cfg.expiration)
 	}
-	if cfg.refreshTokenExpiration != refreshTokenExpiration {
-		t.Errorf("Expected refreshTokenExpiration %v, got %v", refreshTokenExpiration, cfg.refreshTokenExpiration)
-	}
 	if len(cfg.skipPaths) != len(skipPaths) {
 		t.Errorf("Expected skipPaths length %d, got %d", len(skipPaths), len(cfg.skipPaths))
 	}
@@ -58,9 +53,6 @@ func TestInitAndReset(t *testing.T) {
 	resetCfg := GetConfig()
 	if resetCfg.key != "Rtg8BPKNEf2mB4mgvKONGPZZQSaJWNLijxR42qRgq0iBb5" {
 		t.Errorf("Expected default key after reset")
-	}
-	if resetCfg.refreshTokenExpiration != 7*24*time.Hour {
-		t.Errorf("Expected default refreshTokenExpiration 7 days after reset")
 	}
 }
 
@@ -168,173 +160,6 @@ func TestSign(t *testing.T) {
 	}
 	if val, ok := claims["number_field"]; !ok || val.(float64) != 123 {
 		t.Errorf("Expected number_field in claims")
-	}
-}
-
-// TestSignTokens 测试同时签发 access token 和 refresh token
-func TestSignTokens(t *testing.T) {
-	Reset()
-	key := "test-secret-key"
-	identityKey := "user_id"
-	Init(key, WithIdentityKey(identityKey))
-
-	// 测试正常签发
-	identityValue := "test-user-123"
-	tokenPair, err := SignTokens(identityValue)
-	if err != nil {
-		t.Fatalf("SignTokens failed: %v", err)
-	}
-
-	// 验证 access token
-	if tokenPair.AccessToken == "" {
-		t.Fatal("access token is empty")
-	}
-	if tokenPair.AccessExpireAt.IsZero() {
-		t.Fatal("access token expiration is zero")
-	}
-
-	// 验证 refresh token
-	if tokenPair.RefreshToken == "" {
-		t.Fatal("refresh token is empty")
-	}
-	if tokenPair.RefreshExpireAt.IsZero() {
-		t.Fatal("refresh token expiration is zero")
-	}
-
-	// 验证 refresh token 过期时间比 access token 长
-	if tokenPair.RefreshExpireAt.Before(tokenPair.AccessExpireAt) {
-		t.Error("refresh token should expire later than access token")
-	}
-
-	// 验证 access token 的类型
-	accessClaims, err := GetClaims(tokenPair.AccessToken)
-	if err != nil {
-		t.Fatalf("GetClaims for access token failed: %v", err)
-	}
-	if tokenType, ok := accessClaims["type"].(string); !ok || tokenType != "access" {
-		t.Error("access token should have type 'access'")
-	}
-
-	// 验证 refresh token 的类型
-	refreshClaims, err := GetClaims(tokenPair.RefreshToken)
-	if err != nil {
-		t.Fatalf("GetClaims for refresh token failed: %v", err)
-	}
-	if tokenType, ok := refreshClaims["type"].(string); !ok || tokenType != "refresh" {
-		t.Error("refresh token should have type 'refresh'")
-	}
-}
-
-// TestRefreshTokens 测试刷新 token 功能
-func TestRefreshTokens(t *testing.T) {
-	Reset()
-	key := "test-secret-key"
-	identityKey := "user_id"
-	Init(key, WithIdentityKey(identityKey))
-
-	// 签发初始 tokens
-	identityValue := "test-user-123"
-	tokenPair, err := SignTokens(identityValue)
-	if err != nil {
-		t.Fatalf("SignTokens failed: %v", err)
-	}
-
-	// 刷新 tokens
-	newTokenPair, err := RefreshTokens(tokenPair.RefreshToken)
-	if err != nil {
-		t.Fatalf("RefreshTokens failed: %v", err)
-	}
-
-	// 验证新 tokens
-	if newTokenPair.AccessToken == "" {
-		t.Fatal("new access token is empty")
-	}
-	if newTokenPair.AccessExpireAt.IsZero() {
-		t.Fatal("new access token expiration is zero")
-	}
-	if newTokenPair.RefreshToken == "" {
-		t.Fatal("new refresh token is empty")
-	}
-	if newTokenPair.RefreshExpireAt.IsZero() {
-		t.Fatal("new refresh token expiration is zero")
-	}
-
-	// 验证新 access token 的身份信息
-	parsedIdentity, err := ParseIdentity(newTokenPair.AccessToken, key)
-	if err != nil {
-		t.Fatalf("ParseIdentity failed: %v", err)
-	}
-	if parsedIdentity != identityValue {
-		t.Errorf("Expected identity %s, got %s", identityValue, parsedIdentity)
-	}
-}
-
-// TestRefreshTokensWithInvalidTokens 测试使用无效的 refresh token
-func TestRefreshTokensWithInvalidTokens(t *testing.T) {
-	Reset()
-	key := "test-secret-key"
-	identityKey := "user_id"
-	Init(key, WithIdentityKey(identityKey))
-
-	// 测试用例
-	cases := []struct {
-		token      string
-		expectErr  bool
-		errMessage string
-	}{
-		{"", true, ErrEmptyToken.Error()}, // 空 token
-		{"invalid-token", true, ""},       // 无效格式
-		{"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.", true, ""}, // 不完整的 token
-	}
-
-	for i, tc := range cases {
-		_, err := RefreshTokens(tc.token)
-		if !tc.expectErr && err != nil {
-			t.Errorf("Case %d: Expected no error, got %v", i, err)
-		}
-		if tc.expectErr && err == nil {
-			t.Errorf("Case %d: Expected error, got nil", i)
-		}
-		if tc.expectErr && tc.errMessage != "" && err != nil && err.Error() != tc.errMessage {
-			t.Errorf("Case %d: Expected error message '%s', got '%s'", i, tc.errMessage, err.Error())
-		}
-	}
-
-	// 测试使用 access token 作为 refresh token
-	_, _, err := Sign("test-user")
-	if err != nil {
-		t.Fatalf("Sign failed: %v", err)
-	}
-
-	// 测试使用错误密钥签发的 token
-	wrongKeyToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"nbf":  time.Now().Unix(),
-		"iat":  time.Now().Unix(),
-		"exp":  time.Now().Add(24 * time.Hour).Unix(),
-		"type": "refresh",
-	}).SignedString([]byte("wrong-key"))
-	if err != nil {
-		t.Fatalf("Failed to create wrong key token: %v", err)
-	}
-
-	_, err = RefreshTokens(wrongKeyToken)
-	if err == nil {
-		t.Error("Expected error when using token with wrong key")
-	}
-}
-
-// TestConfigAccessorsWithRefreshToken 测试配置访问函数，包括 refresh token 相关
-func TestConfigAccessorsWithRefreshToken(t *testing.T) {
-	Reset()
-	refreshExpiration := 24 * time.Hour
-	Init("test-key",
-		WithIdentityKey("user_id"),
-		WithExpiration(1*time.Hour),
-		WithRefreshTokenExpiration(refreshExpiration),
-	)
-
-	if GetRefreshTokenExpiration() != refreshExpiration {
-		t.Errorf("Expected refresh token expiration %v, got %v", refreshExpiration, GetRefreshTokenExpiration())
 	}
 }
 

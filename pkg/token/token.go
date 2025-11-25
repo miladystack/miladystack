@@ -22,10 +22,8 @@ type Config struct {
 	key string
 	// identityKey 是 token 中用户身份的键
 	identityKey string
-	// expiration 是签发的 access token 过期时间
+	// expiration 是签发的 token 过期时间
 	expiration time.Duration
-	// refreshTokenExpiration 是签发的 refresh token 过期时间
-	refreshTokenExpiration time.Duration
 	// skipPaths 需要跳过认证的路径列表
 	skipPaths []string
 }
@@ -35,11 +33,10 @@ type Option func(*Config)
 
 var (
 	config = Config{
-		key:                    "",
-		identityKey:            "",
-		expiration:             2 * time.Hour,
-		refreshTokenExpiration: 7 * 24 * time.Hour, // 默认7天
-		skipPaths:              []string{},         // 默认不跳过任何路径
+		key:         "",
+		identityKey: "",
+		expiration:  2 * time.Hour,
+		skipPaths:   []string{}, // 默认不跳过任何路径
 	}
 	once sync.Once // 确保配置只被初始化一次
 )
@@ -54,8 +51,6 @@ var (
 	ErrMalformedAuthHeader = errors.New("malformed authorization header")
 	ErrInvalidTokenClaims  = errors.New("invalid token claims")
 	ErrPathSkipped         = errors.New("path is skipped for authentication") // 新增：路径跳过认证
-	ErrInvalidRefreshToken = errors.New("invalid refresh token")
-	ErrRefreshTokenExpired = errors.New("refresh token has expired")
 )
 
 // 3. 配置选项函数
@@ -76,20 +71,11 @@ func WithIdentityKey(identityKey string) Option {
 	}
 }
 
-// WithExpiration 设置 access token 过期时间
+// WithExpiration 设置过期时间
 func WithExpiration(expiration time.Duration) Option {
 	return func(c *Config) {
 		if expiration > 0 {
 			c.expiration = expiration
-		}
-	}
-}
-
-// WithRefreshTokenExpiration 设置 refresh token 过期时间
-func WithRefreshTokenExpiration(expiration time.Duration) Option {
-	return func(c *Config) {
-		if expiration > 0 {
-			c.refreshTokenExpiration = expiration
 		}
 	}
 }
@@ -153,11 +139,10 @@ func Init(key string, opts ...Option) {
 func Reset() {
 	once = sync.Once{}
 	config = Config{
-		key:                    "Rtg8BPKNEf2mB4mgvKONGPZZQSaJWNLijxR42qRgq0iBb5",
-		identityKey:            "identityKey",
-		expiration:             2 * time.Hour,
-		refreshTokenExpiration: 7 * 24 * time.Hour, // 默认7天
-		skipPaths:              []string{},
+		key:         "Rtg8BPKNEf2mB4mgvKONGPZZQSaJWNLijxR42qRgq0iBb5",
+		identityKey: "identityKey",
+		expiration:  2 * time.Hour,
+		skipPaths:   []string{},
 	}
 }
 
@@ -392,13 +377,8 @@ func ParseWithKey(tokenString, key string) (jwt.MapClaims, error) {
 
 // 7. Token 签发功能
 
-// Sign 使用 jwtSecret 签发 access token，token 的 claims 中会存放传入的 subject
+// Sign 使用 jwtSecret 签发 token，token 的 claims 中会存放传入的 subject
 func Sign(identityValue string) (string, time.Time, error) {
-	return SignAccessToken(identityValue)
-}
-
-// SignAccessToken 签发 access token
-func SignAccessToken(identityValue string) (string, time.Time, error) {
 	if config.key == "" {
 		return "", time.Time{}, jwt.ErrInvalidKey
 	}
@@ -408,10 +388,9 @@ func SignAccessToken(identityValue string) (string, time.Time, error) {
 
 	// 构建基础 claims
 	claims := jwt.MapClaims{
-		"nbf":  now.Unix(),      // token 生效时间
-		"iat":  now.Unix(),      // token 签发时间
-		"exp":  expireAt.Unix(), // token 过期时间
-		"type": "access",        // 标识为 access token
+		"nbf": now.Unix(),      // token 生效时间
+		"iat": now.Unix(),      // token 签发时间
+		"exp": expireAt.Unix(), // token 过期时间
 	}
 
 	// 只有在配置了身份键且传入了身份值时，才添加身份信息
@@ -425,137 +404,10 @@ func SignAccessToken(identityValue string) (string, time.Time, error) {
 	// 签发 token
 	tokenString, err := token.SignedString([]byte(config.key))
 	if err != nil {
-		return "", time.Time{}, fmt.Errorf("failed to sign access token: %w", err)
+		return "", time.Time{}, fmt.Errorf("failed to sign token: %w", err)
 	}
 
 	return tokenString, expireAt, nil
-}
-
-// SignRefreshToken 签发 refresh token
-func SignRefreshToken(identityValue string) (string, time.Time, error) {
-	if config.key == "" {
-		return "", time.Time{}, jwt.ErrInvalidKey
-	}
-
-	now := time.Now()
-	expireAt := now.Add(config.refreshTokenExpiration)
-
-	// 构建基础 claims
-	claims := jwt.MapClaims{
-		"nbf":  now.Unix(),      // token 生效时间
-		"iat":  now.Unix(),      // token 签发时间
-		"exp":  expireAt.Unix(), // token 过期时间
-		"type": "refresh",       // 标识为 refresh token
-	}
-
-	// 只有在配置了身份键且传入了身份值时，才添加身份信息
-	if config.identityKey != "" && identityValue != "" {
-		claims[config.identityKey] = identityValue
-	}
-
-	// 创建 token
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-
-	// 签发 token
-	tokenString, err := token.SignedString([]byte(config.key))
-	if err != nil {
-		return "", time.Time{}, fmt.Errorf("failed to sign refresh token: %w", err)
-	}
-
-	return tokenString, expireAt, nil
-}
-
-// TokenPair 表示一对访问令牌和刷新令牌
-type TokenPair struct {
-	AccessToken     string    // 访问令牌字符串
-	AccessExpireAt  time.Time // 访问令牌过期时间
-	RefreshToken    string    // 刷新令牌字符串
-	RefreshExpireAt time.Time // 刷新令牌过期时间
-}
-
-// SignTokens 同时签发 access token 和 refresh token
-func SignTokens(identityValue string) (*TokenPair, error) {
-	// 签发 access token
-	accessToken, accessExpireAt, err := SignAccessToken(identityValue)
-	if err != nil {
-		return nil, err
-	}
-
-	// 签发 refresh token
-	refreshToken, refreshExpireAt, err := SignRefreshToken(identityValue)
-	if err != nil {
-		return nil, err
-	}
-
-	return &TokenPair{
-		AccessToken:     accessToken,
-		AccessExpireAt:  accessExpireAt,
-		RefreshToken:    refreshToken,
-		RefreshExpireAt: refreshExpireAt,
-	}, nil
-}
-
-// RefreshTokens 使用 refresh token 刷新并获取新的 access token 和 refresh token
-func RefreshTokens(refreshTokenString string) (*TokenPair, error) {
-	// 验证 refresh token
-	claims, err := validateRefreshToken(refreshTokenString)
-	if err != nil {
-		return nil, err
-	}
-
-	// 提取身份信息
-	identityValue, err := extractIdentity(claims)
-	if err != nil && err != ErrMissingIdentityKey && err != ErrInvalidIdentityKey {
-		// 允许 refresh token 没有身份信息，以便在不需要身份验证的情况下也能使用
-		return nil, err
-	}
-
-	// 签发新的 tokens
-	return SignTokens(identityValue)
-}
-
-// validateRefreshToken 验证 refresh token 的有效性
-func validateRefreshToken(tokenString string) (jwt.MapClaims, error) {
-	if tokenString == "" {
-		return nil, ErrEmptyToken
-	}
-
-	if config.key == "" {
-		return nil, jwt.ErrInvalidKey
-	}
-
-	// 解析 token
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		// 确保 token 加密算法符合预期的加密算法
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-		return []byte(config.key), nil
-	})
-	if err != nil {
-		if errors.Is(err, jwt.ErrTokenExpired) {
-			return nil, ErrRefreshTokenExpired
-		}
-		return nil, err
-	}
-
-	// 验证 token 有效性
-	if !token.Valid {
-		return nil, ErrInvalidRefreshToken
-	}
-
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok {
-		return nil, ErrInvalidTokenClaims
-	}
-
-	// 验证 token 类型
-	tokenType, ok := claims["type"].(string)
-	if !ok || tokenType != "refresh" {
-		return nil, ErrInvalidRefreshToken
-	}
-
-	return claims, nil
 }
 
 // SignWithClaims 使用自定义 claims 签发 token
@@ -691,14 +543,9 @@ func IsIdentityRequired() bool {
 	return config.identityKey != ""
 }
 
-// GetExpiration 获取当前配置的 access token 过期时间
+// GetExpiration 获取当前配置的过期时间
 func GetExpiration() time.Duration {
 	return config.expiration
-}
-
-// GetRefreshTokenExpiration 获取当前配置的 refresh token 过期时间
-func GetRefreshTokenExpiration() time.Duration {
-	return config.refreshTokenExpiration
 }
 
 // GetSkipPaths 获取跳过认证的路径列表
