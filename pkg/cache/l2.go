@@ -5,8 +5,6 @@ import (
 	"time"
 
 	"github.com/dgraph-io/ristretto"
-
-	"github.com/miladystack/miladystack/pkg/cache/store"
 )
 
 // L2Cache represents a two-level cache configuration.
@@ -49,15 +47,22 @@ func (c *L2Cache[T]) Get(ctx context.Context, key any) (T, error) {
 func (c *L2Cache[T]) GetWithTTL(ctx context.Context, key any) (T, time.Duration, error) {
 	if !c.opts.Disable {
 		ttl, found := c.local.GetTTL(keyFunc(key))
-		if !found {
-			return *new(T), 0, store.ErrKeyNotFound
+		if found {
+			value, _ := c.local.Get(keyFunc(key))
+			return value.(T), ttl, nil
 		}
-
-		value, _ := c.local.Get(keyFunc(key))
-		return value.(T), ttl, nil
 	}
 
-	return c.remote.GetWithTTL(ctx, key)
+	value, ttl, err := c.remote.GetWithTTL(ctx, key)
+	if err != nil {
+		return *new(T), 0, err
+	}
+
+	if !c.opts.Disable {
+		c.local.SetWithTTL(keyFunc(key), value, 0, ttl)
+	}
+
+	return value, ttl, nil
 }
 
 // Set populates the cache item using the given key.
