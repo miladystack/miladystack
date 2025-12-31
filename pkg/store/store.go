@@ -3,8 +3,6 @@ package store
 import (
 	"context"
 	"errors"
-	"fmt"
-	"strings"
 
 	"gorm.io/gorm"
 
@@ -96,42 +94,8 @@ func (s *Store[T]) Get(ctx context.Context, opts *where.Options) (*T, error) {
 }
 
 // List retrieves a list of objects from the database based on the provided where options.
-func (s *Store[T]) List(ctx context.Context, orderStr string, isAsc bool, page, pageSize int, opts *where.Options) (count int64, ret []*T, err error) {
-	// 根据 isAsc 参数确定排序方式
-	sortDirection := "ASC"
-	if !isAsc {
-		sortDirection = "DESC"
-	}
-
-	// 如果用户未指定排序字段，则默认使用 id
-	if orderStr == "" {
-		orderStr = fmt.Sprintf("id %s", sortDirection)
-	} else {
-		orderStr = strings.TrimSpace(orderStr)
-		orderStr = fmt.Sprintf("%s %s", orderStr, sortDirection)
-	}
-
-	// 计算分页偏移量
-	offset := (page - 1) * pageSize
-
-	// 构建查询：先统计总数，再查询分页数据
-	db := s.db(ctx, opts)
-
-	// 第一步：统计符合条件的总条数（不受分页影响）
-	if err = db.Model(new(T)).Count(&count).Error; err != nil {
-		s.logger.Error(ctx, err, "Failed to count objects from database", "conditions", opts)
-		return
-	}
-
-	// 第二步：查询分页数据（使用 pageSize 限制条数）
-	// 处理边界情况：pageSize <= 0 时返回空列表（避免查询全部数据）
-	if pageSize > 0 {
-		err = db.Order(orderStr).Offset(offset).Limit(pageSize).Find(&ret).Error
-	} else {
-		ret = []*T{}
-		err = nil
-	}
-
+func (s *Store[T]) List(ctx context.Context, opts *where.Options) (count int64, ret []*T, err error) {
+	err = s.db(ctx, opts).Order("id desc").Find(&ret).Offset(-1).Limit(-1).Count(&count).Error
 	if err != nil {
 		s.logger.Error(ctx, err, "Failed to list objects from database", "conditions", opts)
 	}
