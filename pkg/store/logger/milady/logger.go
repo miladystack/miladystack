@@ -1,6 +1,8 @@
 package milady
 
 import (
+	"context"
+
 	"github.com/miladystack/miladystack/pkg/log"
 )
 
@@ -10,6 +12,6 @@ func NewLogger() *miladyLogger {
 	return &miladyLogger{}
 }
 
-func (l *miladyLogger) Error(err error, msg string, kvs ...any) {
+func (l *miladyLogger) Error(ctx context.Context, err error, msg string, kvs ...any) {
 	log.Errorw(err, msg, kvs...)
 }

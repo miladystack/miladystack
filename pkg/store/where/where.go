@@ -52,6 +52,9 @@ type Options struct {
 	Clauses []clause.Expression
 	// Queries contains a list of queries to be executed.
 	Queries []Query
+	// Order defines the sorting order for the query results.
+	// +optional
+	Order string `json:"order"`
 }
 
 // tenant holds the registered tenant instance.
@@ -116,6 +119,13 @@ func WithQuery(query interface{}, args ...interface{}) Option {
 	}
 }
 
+// WithOrder creates an Option that sets the order for the query.
+func WithOrder(order string) Option {
+	return func(whr *Options) {
+		whr.Order = order
+	}
+}
+
 // NewWhere constructs a new Options object, applying the given where options.
 func NewWhere(opts ...Option) *Options {
 	whr := &Options{
@@ -123,6 +133,7 @@ func NewWhere(opts ...Option) *Options {
 		Limit:   defaultLimit,
 		Filters: map[any]any{},
 		Clauses: make([]clause.Expression, 0),
+		Order:   "",
 	}
 
 	for _, opt := range opts {
@@ -176,6 +187,12 @@ func (whr *Options) Q(query interface{}, args ...interface{}) *Options {
 	return whr
 }
 
+// Or sets the ordering for the query.
+func (whr *Options) Or(order string) *Options {
+	whr.Order = order
+	return whr
+}
+
 // T retrieves the value associated with the registered tenant using the provided context.
 func (whr *Options) T(ctx context.Context) *Options {
 	if registeredTenant.Key != "" && registeredTenant.ValueFunc != nil {
@@ -200,13 +217,21 @@ func (whr *Options) F(kvs ...any) *Options {
 	return whr
 }
 
-// Where applies the filters and clauses to the given gorm.DB instance.
+// Where applies the filters, clauses and order to the given gorm.DB instance.
 func (whr *Options) Where(db *gorm.DB) *gorm.DB {
 	for _, query := range whr.Queries {
 		conds := db.Statement.BuildCondition(query.Query, query.Args...)
 		whr.Clauses = append(whr.Clauses, conds...)
 	}
-	return db.Where(whr.Filters).Clauses(whr.Clauses...).Offset(whr.Offset).Limit(whr.Limit)
+
+	db = db.Where(whr.Filters).Clauses(whr.Clauses...).Offset(whr.Offset).Limit(whr.Limit)
+
+	// Apply ordering if specified
+	if whr.Order != "" {
+		db = db.Order(whr.Order)
+	}
+
+	return db
 }
 
 // O is a convenience function to create a new Options with offset.
@@ -237,6 +262,11 @@ func T(ctx context.Context) *Options {
 // F is a convenience function to create a new Options with filters.
 func F(kvs ...any) *Options {
 	return NewWhere().F(kvs...)
+}
+
+// Or is a convenience function to create a new Options with ordering.
+func Or(order string) *Options {
+	return NewWhere().Or(order)
 }
 
 // RegisterTenant registers a new tenant with the specified key and value function.

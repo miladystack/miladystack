@@ -95,7 +95,16 @@ func (s *Store[T]) Get(ctx context.Context, opts *where.Options) (*T, error) {
 
 // List retrieves a list of objects from the database based on the provided where options.
 func (s *Store[T]) List(ctx context.Context, opts *where.Options) (count int64, ret []*T, err error) {
-	err = s.db(ctx, opts).Order("id desc").Find(&ret).Offset(-1).Limit(-1).Count(&count).Error
+	db := s.db(ctx, opts)
+
+	// Apply default sorting if no order is specified in options
+	// Check if opts is nil or order is not set
+	orderIsEmpty := opts == nil || opts.Order == ""
+	if orderIsEmpty {
+		db = db.Order("id desc")
+	}
+
+	err = db.Find(&ret).Offset(-1).Limit(-1).Count(&count).Error
 	if err != nil {
 		s.logger.Error(ctx, err, "Failed to list objects from database", "conditions", opts)
 	}
