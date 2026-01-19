@@ -15,13 +15,14 @@ import (
 	"gorm.io/gorm"
 )
 
-// User represents a user model
+// User represents a user model with custom soft delete support
 type User struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	Name      string    `gorm:"size:255" json:"name"`
-	Email     string    `gorm:"size:255;uniqueIndex" json:"email"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID        uint           `gorm:"primaryKey" json:"id"`
+	Name      string         `gorm:"size:255" json:"name"`
+	Email     string         `gorm:"size:255;uniqueIndex" json:"email"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"column:is_deleted;comment:软删除时间;index" json:"is_deleted"` // 软删除字段，使用自定义列名
 }
 
 // MySQLProvider implements DBProvider interface
@@ -261,6 +262,120 @@ func testDeleteUser(store *store.Store[User], ctx context.Context, userID uint) 
 	return fmt.Errorf("user was not properly deleted")
 }
 
+// testSoftDelete tests soft deletion and unscoped queries
+func testSoftDelete(store *store.Store[User], ctx context.Context) error {
+	fmt.Println("\n=== SOFT DELETE AND UNSCOPED QUERY TEST ===")
+
+	// 1. Create a test user for soft delete
+	fmt.Println("\n1. Creating test user for soft delete...")
+	softDeleteUser := &User{
+		Name:  "Soft Delete Test User",
+		Email: fmt.Sprintf("soft.delete.test%d@example.com", time.Now().Unix()),
+	}
+
+	err := store.Create(ctx, softDeleteUser)
+	if err != nil {
+		log.Printf("Failed to create soft delete test user: %v", err)
+		return err
+	}
+
+	userID := softDeleteUser.ID
+	fmt.Printf("   ✅ Created test user: ID=%d, Name=%s\n", userID, softDeleteUser.Name)
+
+	// 2. Delete the user (soft delete)
+	fmt.Println("\n2. Performing soft delete on test user...")
+	err = store.Delete(ctx, where.F("id", userID))
+	if err != nil {
+		log.Printf("Failed to soft delete user: %v", err)
+		return err
+	}
+
+	fmt.Printf("   ✅ Soft deleted user with ID: %d\n", userID)
+
+	// 3. Try to get the user with normal query (should fail)
+	fmt.Println("\n3. Attempting to get soft deleted user with normal query...")
+	deletedUser, err := store.Get(ctx, where.F("id", userID))
+	if err != nil {
+		fmt.Printf("   ✅ Normal query: User not found (expected): %v\n", err)
+	} else {
+		fmt.Printf("   ❌ Normal query: User still found (unexpected): %+v\n", deletedUser)
+		return fmt.Errorf("user should not be found with normal query after soft delete")
+	}
+
+	// 4. Try to get the user with Unscoped query (should succeed)
+	fmt.Println("\n4. Attempting to get soft deleted user with Unscoped query...")
+	unscopedUser, err := store.Get(ctx, where.F("id", userID).U(true))
+	if err != nil {
+		fmt.Printf("   ❌ Unscoped query: User not found (unexpected): %v\n", err)
+		return err
+	} else {
+		fmt.Printf("   ✅ Unscoped query: Found soft deleted user: %+v\n", unscopedUser)
+	}
+
+	// 5. List users with normal query (should not include deleted user)
+	fmt.Println("\n5. Listing users with normal query (should exclude deleted users):")
+	count, _, err := store.List(ctx, where.P(1, 10))
+	if err != nil {
+		log.Printf("Failed to list users with normal query: %v", err)
+		return err
+	}
+	fmt.Printf("   ✅ Normal query - Total users: %d\n", count)
+
+	// 6. List users with Unscoped query (should include deleted user)
+	fmt.Println("\n6. Listing users with Unscoped query (should include deleted users):")
+	unscopedCount, unscopedUsers, err := store.List(ctx, where.P(1, 10).U(true))
+	if err != nil {
+		log.Printf("Failed to list users with unscoped query: %v", err)
+		return err
+	}
+	fmt.Printf("   ✅ Unscoped query - Total users: %d\n", unscopedCount)
+
+	// 7. Compare counts to show difference
+	fmt.Printf("\n7. Count comparison: %d total users (including %d deleted)\n", unscopedCount, unscopedCount-count)
+
+	// 8. Show deleted users in unscoped list
+	fmt.Println("\n8. Showing deleted users in unscoped list:")
+	for _, user := range unscopedUsers {
+		if user.DeletedAt.Time != (time.Time{}) {
+			fmt.Printf("   🗑️  Deleted user: ID=%d, Name=%s, DeletedAt=%s\n",
+				user.ID, user.Name, user.DeletedAt.Time.Format("2006-01-02 15:04:05"))
+		}
+	}
+
+	// 9. Restore the soft deleted user
+	fmt.Println("\n9. Restoring soft deleted user...")
+	// To restore a soft deleted record, we need to update the DeletedAt field to zero value
+	// Get the record with Unscoped first
+	restoredUser, err := store.Get(ctx, where.F("id", userID).U(true))
+	if err != nil {
+		log.Printf("Failed to get soft deleted user for restoration: %v", err)
+		return err
+	}
+
+	// Clear the DeletedAt field to restore
+	restoredUser.DeletedAt = gorm.DeletedAt{}
+	// Update the user
+	err = store.Update(ctx, restoredUser)
+	if err != nil {
+		log.Printf("Failed to restore user: %v", err)
+		return err
+	}
+	fmt.Printf("   ✅ Restored user with ID: %d\n", userID)
+
+	// 10. Verify restoration
+	fmt.Println("\n10. Verifying restoration with normal query...")
+	restoredUser, err = store.Get(ctx, where.F("id", userID))
+	if err != nil {
+		fmt.Printf("   ❌ Normal query: User not found (unexpected): %v\n", err)
+		return err
+	} else {
+		fmt.Printf("   ✅ Normal query: Found restored user: %+v\n", restoredUser)
+	}
+
+	fmt.Println("\n✅ Soft delete, Unscoped query and restoration tests completed successfully!")
+	return nil
+}
+
 // testFilteredList tests listing users with filters
 func testFilteredList(store *store.Store[User], ctx context.Context) error {
 	fmt.Println("\n=== FILTERED LIST TEST ===")
@@ -406,6 +521,12 @@ func main() {
 	err = testDeleteUser(userStore, ctx, updatedUser.ID)
 	if err != nil {
 		log.Fatalf("Delete user test failed: %v", err)
+	}
+
+	// 6. Test soft delete and unscoped queries
+	err = testSoftDelete(userStore, ctx)
+	if err != nil {
+		log.Fatalf("Soft delete test failed: %v", err)
 	}
 
 	fmt.Println("\n🎉 ALL TESTS COMPLETED SUCCESSFULLY!")

@@ -55,6 +55,9 @@ type Options struct {
 	// Order defines the sorting order for the query results.
 	// +optional
 	Order string `json:"order"`
+	// Unscoped specifies whether to include soft-deleted records in the query results.
+	// +optional
+	Unscoped bool `json:"unscoped"`
 }
 
 // tenant holds the registered tenant instance.
@@ -126,14 +129,22 @@ func WithOrder(order string) Option {
 	}
 }
 
+// WithUnscoped creates an Option that sets the Unscoped flag for the query.
+func WithUnscoped(unscoped bool) Option {
+	return func(whr *Options) {
+		whr.Unscoped = unscoped
+	}
+}
+
 // NewWhere constructs a new Options object, applying the given where options.
 func NewWhere(opts ...Option) *Options {
 	whr := &Options{
-		Offset:  0,
-		Limit:   defaultLimit,
-		Filters: map[any]any{},
-		Clauses: make([]clause.Expression, 0),
-		Order:   "",
+		Offset:   0,
+		Limit:    defaultLimit,
+		Filters:  map[any]any{},
+		Clauses:  make([]clause.Expression, 0),
+		Order:    "",
+		Unscoped: false,
 	}
 
 	for _, opt := range opts {
@@ -193,6 +204,12 @@ func (whr *Options) Or(order string) *Options {
 	return whr
 }
 
+// U sets the Unscoped flag for the query, which includes soft-deleted records when true.
+func (whr *Options) U(unscoped bool) *Options {
+	whr.Unscoped = unscoped
+	return whr
+}
+
 // T retrieves the value associated with the registered tenant using the provided context.
 func (whr *Options) T(ctx context.Context) *Options {
 	if registeredTenant.Key != "" && registeredTenant.ValueFunc != nil {
@@ -217,11 +234,16 @@ func (whr *Options) F(kvs ...any) *Options {
 	return whr
 }
 
-// Where applies the filters, clauses and order to the given gorm.DB instance.
+// Where applies the filters, clauses, order and unscoped options to the given gorm.DB instance.
 func (whr *Options) Where(db *gorm.DB) *gorm.DB {
 	for _, query := range whr.Queries {
 		conds := db.Statement.BuildCondition(query.Query, query.Args...)
 		whr.Clauses = append(whr.Clauses, conds...)
+	}
+
+	// Apply unscoped option if specified
+	if whr.Unscoped {
+		db = db.Unscoped()
 	}
 
 	db = db.Where(whr.Filters).Clauses(whr.Clauses...).Offset(whr.Offset).Limit(whr.Limit)
@@ -267,6 +289,11 @@ func F(kvs ...any) *Options {
 // Or is a convenience function to create a new Options with ordering.
 func Or(order string) *Options {
 	return NewWhere().Or(order)
+}
+
+// U is a convenience function to create a new Options with Unscoped flag.
+func U(unscoped bool) *Options {
+	return NewWhere().U(unscoped)
 }
 
 // RegisterTenant registers a new tenant with the specified key and value function.
