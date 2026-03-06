@@ -8,92 +8,130 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
-// -------------------------- 1. 定义选项类型 --------------------------
-// DocPropOption 文档属性配置选项类型
+// ExcelFile 封装excelize.File
+type ExcelFile struct {
+	file *excelize.File
+}
+
+// -------------------------- 1. 核心文档属性（DocProps）相关定义 --------------------------
+type docPropsConfig struct {
+	title          string
+	subject        string
+	creator        string
+	keywords       string
+	description    string
+	lastModifiedBy string
+	category       string
+	contentStatus  string
+	created        string
+	identifier     string
+	modified       string
+	revision       string
+	language       string
+	version        string
+}
+
 type DocPropOption func(*docPropsConfig)
 
-// -------------------------- 2. 预定义便捷选项函数 --------------------------
-// WithTitle 设置文档标题
+// 预定义DocProps选项函数
 func WithTitle(title string) DocPropOption {
-	return func(c *docPropsConfig) {
-		c.title = title
-	}
+	return func(c *docPropsConfig) { c.title = title }
 }
 
-// WithSubject 设置文档主题
 func WithSubject(subject string) DocPropOption {
-	return func(c *docPropsConfig) {
-		c.subject = subject
-	}
+	return func(c *docPropsConfig) { c.subject = subject }
 }
 
-// WithCreator 设置创建者（作者），未传则默认系统用户名
 func WithCreator(creator string) DocPropOption {
-	return func(c *docPropsConfig) {
-		c.creator = creator
-	}
+	return func(c *docPropsConfig) { c.creator = creator }
 }
 
-// WithKeywords 设置关键词（多个用逗号分隔）
 func WithKeywords(keywords string) DocPropOption {
-	return func(c *docPropsConfig) {
-		c.keywords = keywords
+	return func(c *docPropsConfig) { c.keywords = keywords }
+}
+
+func WithDescription(desc string) DocPropOption {
+	return func(c *docPropsConfig) { c.description = desc }
+}
+
+func WithLastModifiedBy(user string) DocPropOption {
+	return func(c *docPropsConfig) { c.lastModifiedBy = user }
+}
+
+func WithCategory(cate string) DocPropOption {
+	return func(c *docPropsConfig) { c.category = cate }
+}
+
+// -------------------------- 2. 应用属性（AppProps）相关定义--------------------------
+// appPropsConfig 内部应用属性配置
+type appPropsConfig struct {
+	application       string // 创建文档的应用程序名称
+	scaleCrop         bool   // 文档缩略图显示方式（true=缩放，false=剪裁）
+	docSecurity       int    // 文档安全级别（1-4）
+	company           string // 关联公司名称
+	linksUpToDate     bool   // 超链接是否最新
+	hyperlinksChanged bool   // 是否需要更新超链接关系
+	appVersion        string // 应用版本（格式：XX.YYYY）
+}
+
+// AppPropOption 应用属性选项函数类型
+type AppPropOption func(*appPropsConfig)
+
+// 预定义AppProps选项函数
+func WithApplication(appName string) AppPropOption {
+	return func(c *appPropsConfig) { c.application = appName }
+}
+
+func WithScaleCrop(scale bool) AppPropOption {
+	return func(c *appPropsConfig) { c.scaleCrop = scale }
+}
+
+// WithDocSecurity 设置文档安全级别（有效值1-4）
+// 1-文档受密码保护
+// 2-建议以只读方式打开
+// 3-强制以只读方式打开
+// 4-文档批注被锁定
+func WithDocSecurity(level int) AppPropOption {
+	return func(c *appPropsConfig) {
+		// 简单校验安全级别范围
+		if level < 1 || level > 4 {
+			level = 0 // 非法值则设为0（表示无安全设置）
+		}
+		c.docSecurity = level
 	}
 }
 
-// WithDescription 设置文档描述/备注
-func WithDescription(description string) DocPropOption {
-	return func(c *docPropsConfig) {
-		c.description = description
-	}
+func WithCompany(company string) AppPropOption {
+	return func(c *appPropsConfig) { c.company = company }
 }
 
-// WithLastModifiedBy 设置最后修改者
-func WithLastModifiedBy(lastModifiedBy string) DocPropOption {
-	return func(c *docPropsConfig) {
-		c.lastModifiedBy = lastModifiedBy
-	}
+func WithLinksUpToDate(isUpToDate bool) AppPropOption {
+	return func(c *appPropsConfig) { c.linksUpToDate = isUpToDate }
 }
 
-// WithCategory 设置文档分类
-func WithCategory(category string) DocPropOption {
-	return func(c *docPropsConfig) {
-		c.category = category
-	}
+func WithHyperlinksChanged(changed bool) AppPropOption {
+	return func(c *appPropsConfig) { c.hyperlinksChanged = changed }
 }
 
-// WithContentStatus 设置内容状态（如 "草稿"、"已发布"、"审核中"）
-func WithContentStatus(status string) DocPropOption {
-	return func(c *docPropsConfig) {
-		c.contentStatus = status
-	}
+// WithAppVersion 设置应用版本（格式建议为 XX.YYYY，如 "1.2025"）
+func WithAppVersion(version string) AppPropOption {
+	return func(c *appPropsConfig) { c.appVersion = version }
 }
-
-// WithCreated 设置创建时间（自动转为ISO 8601格式）
-func WithCreated(t time.Time) DocPropOption {
-	return func(c *docPropsConfig) {
-		c.created = t.Format(time.RFC3339) // ISO 8601标准格式
-	}
-}
-
-// WithLanguage 设置文档语言（如 "zh-CN"、"en-US"）
-func WithLanguage(lang string) DocPropOption {
-	return func(c *docPropsConfig) {
-		c.language = lang
-	}
-}
-
-// 可按需扩展：WithIdentifier、WithModified、WithRevision、WithVersion 等
 
 // -------------------------- 3. 核心方法实现 --------------------------
-// NewFile 创建新的Excel文件实例
+// NewFile 创建新Excel文件，自动设置默认文档属性
 func NewFile() *ExcelFile {
-	return &ExcelFile{
+	ef := &ExcelFile{
 		file: excelize.NewFile(),
 	}
+	// 自动设置默认核心文档属性
+	_ = ef.SetDocProps()
+	// 自动设置默认应用属性
+	_ = ef.SetAppProps()
+	return ef
 }
 
-// OpenFile 打开已存在的Excel文件
+// OpenFile 打开已有文件，不修改原有属性
 func OpenFile(path string) (*ExcelFile, error) {
 	f, err := excelize.OpenFile(path)
 	if err != nil {
@@ -102,27 +140,29 @@ func OpenFile(path string) (*ExcelFile, error) {
 	return &ExcelFile{file: f}, nil
 }
 
-// SetDocProps 设置Excel文档属性
+// SetDocProps 设置核心文档属性（含默认值）
 func (e *ExcelFile) SetDocProps(opts ...DocPropOption) error {
 	// 1. 初始化默认配置
 	config := &docPropsConfig{
-		creator:       "miladystack",                   // 创作者兜底默认值
-		language:      "zh-CN",                         // 默认语言：中文
-		contentStatus: "已完成",                           // 默认内容状态
-		created:       time.Now().Format(time.RFC3339), // 默认创建时间：当前时间
+		creator:        "miladystack",
+		language:       "zh-CN",
+		contentStatus:  "已完成",
+		created:        time.Now().Format(time.RFC3339),
+		lastModifiedBy: "miladystack",
 	}
 
-	// 2. 自动填充创作者默认值（系统用户名）
+	// 2. 优先用系统用户名覆盖
 	if u, err := user.Current(); err == nil {
 		config.creator = u.Username
+		config.lastModifiedBy = u.Username
 	}
 
-	// 3. 应用所有传入的选项函数（覆盖默认值）
+	// 3. 应用用户选项
 	for _, opt := range opts {
 		opt(config)
 	}
 
-	// 4. 严格映射到excelize原生DocProperties
+	// 4. 映射到原生配置
 	excelProps := &excelize.DocProperties{
 		Title:          config.title,
 		Subject:        config.subject,
@@ -140,51 +180,76 @@ func (e *ExcelFile) SetDocProps(opts ...DocPropOption) error {
 		Version:        config.version,
 	}
 
-	// 5. 调用官方SetDocProps方法
 	if err := e.file.SetDocProps(excelProps); err != nil {
-		return fmt.Errorf("设置Excel文档属性失败: %w", err)
+		return fmt.Errorf("设置核心文档属性失败: %w", err)
 	}
 	return nil
 }
 
-// Save 保存Excel文件
+// SetAppProps 设置应用属性
+func (e *ExcelFile) SetAppProps(opts ...AppPropOption) error {
+	// 1. 初始化默认配置
+	config := &appPropsConfig{
+		application: "miladystack-excel", // 默认应用名称
+		company:     "miladystack",       // 默认公司名称
+		appVersion:  "1.0000",            // 默认版本（符合XX.YYYY格式）
+		scaleCrop:   false,               // 默认缩略图剪裁显示
+		docSecurity: 0,                   // 默认无安全设置
+	}
+
+	// 2. 应用用户传入的选项（覆盖默认值）
+	for _, opt := range opts {
+		opt(config)
+	}
+
+	// 3. 映射到excelize原生AppProperties
+	excelAppProps := &excelize.AppProperties{
+		Application:       config.application,
+		ScaleCrop:         config.scaleCrop,
+		DocSecurity:       config.docSecurity,
+		Company:           config.company,
+		LinksUpToDate:     config.linksUpToDate,
+		HyperlinksChanged: config.hyperlinksChanged,
+		AppVersion:        config.appVersion,
+	}
+
+	// 4. 调用原生SetAppProps方法
+	if err := e.file.SetAppProps(excelAppProps); err != nil {
+		return fmt.Errorf("设置应用属性失败: %w", err)
+	}
+	return nil
+}
+
+// FreezePanes 冻结窗格
+func (e *ExcelFile) FreezePanes(sheetName string, freezeRows int, freezeCols int) error {
+	if freezeRows < 0 || freezeCols < 0 {
+		return fmt.Errorf("冻结行数/列数不能为负数")
+	}
+
+	colName, err := excelize.ColumnNumberToName(freezeCols + 1)
+	if err != nil {
+		return fmt.Errorf("列数转换失败: %w", err)
+	}
+	topLeftCell := fmt.Sprintf("%s%d", colName, freezeRows+1)
+
+	return e.file.SetPanes(sheetName, &excelize.Panes{
+		Freeze:      true,
+		Split:       false,
+		XSplit:      freezeCols,
+		YSplit:      freezeRows,
+		TopLeftCell: topLeftCell,
+		ActivePane:  "bottomLeft",
+		Selection: []excelize.Selection{
+			{SQRef: topLeftCell, ActiveCell: topLeftCell, Pane: "bottomLeft"},
+		},
+	})
+}
+
+// Save 保存文件
 func (e *ExcelFile) Save(path string) error {
 	defer e.file.Close()
 	if err := e.file.SaveAs(path); err != nil {
 		return fmt.Errorf("保存Excel文件失败: %w", err)
 	}
 	return nil
-}
-
-// FreezePanes 冻结窗格
-// sheetName: 工作表名
-// freezeRows: 要冻结的行数（如9表示冻结前9行）
-// freezeCols: 要冻结的列数（如2表示冻结前2列）
-func (e *ExcelFile) FreezePanes(sheetName string, freezeRows int, freezeCols int) error {
-	// 校验参数合法性
-	if freezeRows < 0 || freezeCols < 0 {
-		return fmt.Errorf("冻结行数/列数不能为负数")
-	}
-
-	// v2版本用ColumnNumberToName，且列数从1开始
-	// 例如：freezeCols=0 → 列1 → A；freezeCols=2 → 列3 → C
-	colName, err := excelize.ColumnNumberToName(freezeCols + 1)
-	if err != nil {
-		return fmt.Errorf("列数转换失败: %w", err)
-	}
-	// 计算冻结后窗格的左上角单元格（如冻结9行0列 → A10）
-	topLeftCell := fmt.Sprintf("%s%d", colName, freezeRows+1)
-
-	// 调用v2的SetPanes方法
-	return e.file.SetPanes(sheetName, &excelize.Panes{
-		Freeze:      true,
-		Split:       false,
-		XSplit:      freezeCols,   // 列拆分位置
-		YSplit:      freezeRows,   // 行拆分位置
-		TopLeftCell: topLeftCell,  // 修正后的左上角单元格
-		ActivePane:  "bottomLeft", // 激活左下窗格（冻结后的可编辑区域）
-		Selection: []excelize.Selection{
-			{SQRef: topLeftCell, ActiveCell: topLeftCell, Pane: "bottomLeft"},
-		},
-	})
 }
