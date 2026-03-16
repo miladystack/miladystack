@@ -38,10 +38,23 @@ func Serve(ctx context.Context, srv Server) error {
 	return nil
 }
 
-// protocolName 从 http.Server 中获取协议名.
+// protocolName 从 http.Server 中获取服务使用的协议名称
+//
+// 参数说明：
+//
+//	server: http.Server 实例指针，允许传入 nil
+//
+// 返回值：
+//
+//	协议名称（http/https），默认返回 http
 func protocolName(server *http.Server) string {
-	if server.TLSConfig != nil {
+	if server == nil {
+		return "http"
+	}
+
+	if server.TLSConfig != nil && len(server.TLSConfig.Certificates) > 0 {
 		return "https"
 	}
+
 	return "http"
 }
